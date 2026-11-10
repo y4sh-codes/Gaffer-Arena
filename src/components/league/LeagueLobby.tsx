@@ -50,8 +50,13 @@ export default function LeagueLobby({ league, currentUserId }: LeagueLobbyProps)
     setStarting(true);
     setError(null);
     try {
-      await startAuctionAction(league.id);
-      router.push(`/leagues/${league.id}/auction`);
+      const res = await startAuctionAction(league.id);
+      if (res.success) {
+        router.push(`/leagues/${league.id}/auction`);
+      } else {
+        setError(res.error || "Failed to start auction");
+        setStarting(false);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start auction");
       setStarting(false);
@@ -62,8 +67,12 @@ export default function LeagueLobby({ league, currentUserId }: LeagueLobbyProps)
     setFillingAI(true);
     setError(null);
     try {
-      await fillLobbyWithAITeamsAction(league.id, slotsRemaining);
-      router.refresh();
+      const res = await fillLobbyWithAITeamsAction(league.id, slotsRemaining);
+      if (res.success) {
+        router.refresh();
+      } else {
+        setError(res.error || "Failed to add AI teams");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add AI teams");
     } finally {

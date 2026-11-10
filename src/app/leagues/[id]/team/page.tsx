@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { getCurrentUserOrGuest } from "@/lib/actions/league-actions";
 import TeamHubClient from "./TeamHubClient";
 
+export const dynamic = "force-dynamic";
+
 interface TeamHubPageProps {
   params: Promise<{ id: string }>;
 }

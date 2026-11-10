@@ -27,51 +27,55 @@ export async function advanceSeasonAction(leagueId: string) {
 
   const updatedTeams: any[] = [];
 
-  await prisma.$transaction(async (tx) => {
-    // 1. Apply prize multipliers and reset match records
-    for (let rank = 0; rank < league.teams.length; rank++) {
-      const team = league.teams[rank];
-      const multiplier = prizeMultipliers[rank] ?? 1.10; // 4th-16th: +10% budget
-      const newBudget = Math.round(team.budget * multiplier);
+  await prisma.$transaction(
+    async (tx) => {
+      // 1. Apply prize multipliers and reset match records concurrently
+      await Promise.all(
+        league.teams.map(async (team, rank) => {
+          const multiplier = prizeMultipliers[rank] ?? 1.10; // 4th-16th: +10% budget
+          const newBudget = Math.round(team.budget * multiplier);
 
-      const updated = await tx.team.update({
-        where: { id: team.id },
+          await tx.team.update({
+            where: { id: team.id },
+            data: {
+              budget: newBudget,
+              points: 0,
+              matchesPlayed: 0,
+              won: 0,
+              drawn: 0,
+              lost: 0,
+              goalsFor: 0,
+              goalsAgainst: 0,
+              goalDifference: 0,
+            },
+          });
+
+          updatedTeams.push({
+            teamName: team.teamName,
+            rank: rank + 1,
+            oldBudget: team.budget,
+            newBudget,
+            multiplierBonus: `${Math.round((multiplier - 1) * 100)}%`,
+          });
+        })
+      );
+
+      // 2. Clear old matches to prepare for new season schedule
+      await tx.match.deleteMany({
+        where: { leagueId },
+      });
+
+      // 3. Increment season and transition to AUCTION for next draft
+      await tx.league.update({
+        where: { id: leagueId },
         data: {
-          budget: newBudget,
-          points: 0,
-          matchesPlayed: 0,
-          won: 0,
-          drawn: 0,
-          lost: 0,
-          goalsFor: 0,
-          goalsAgainst: 0,
-          goalDifference: 0,
+          currentSeason: league.currentSeason + 1,
+          status: "AUCTION",
         },
       });
-
-      updatedTeams.push({
-        teamName: team.teamName,
-        rank: rank + 1,
-        oldBudget: team.budget,
-        newBudget,
-        multiplierBonus: `${Math.round((multiplier - 1) * 100)}%`,
-      });
-    }
-
-    // 2. Clear old matches to prepare for new season schedule
-    await tx.match.deleteMany({
-      where: { leagueId },
-    });
-
-    // 3. Increment season and transition to AUCTION for next draft
-    await tx.league.update({
-      where: { id: leagueId },
-      data: {
-        currentSeason: league.currentSeason + 1,
-        status: "AUCTION",
-      },
-    });
-  });
+    },
+    { maxWait: 15000, timeout: 30000 }
+  );
 
   try {
     revalidatePath(`/leagues/${leagueId}/standings`);

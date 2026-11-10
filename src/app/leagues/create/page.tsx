@@ -6,6 +6,8 @@ import { createLeagueAction } from "@/lib/actions/league-actions";
 import { Trophy, DollarSign, Shield, ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default function CreateLeaguePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,7 @@ export default function CreateLeaguePage() {
       if (res.success && res.leagueId) {
         router.push(`/leagues/${res.leagueId}/lobby`);
       } else {
-        setError("Failed to create league. Please verify inputs.");
+        setError(res.error || "Failed to create league. Please verify inputs.");
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong creating the league.");

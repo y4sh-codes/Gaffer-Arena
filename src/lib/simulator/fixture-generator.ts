@@ -74,18 +74,16 @@ export async function generateDoubleRoundRobinSchedule(leagueId: string) {
 
   const allFixtures = [...firstHalfMatches, ...secondHalfMatches];
 
-  // Bulk create in database
-  for (const f of allFixtures) {
-    await prisma.match.create({
-      data: {
-        leagueId,
-        matchday: f.matchday,
-        homeTeamId: f.homeTeamId,
-        awayTeamId: f.awayTeamId,
-        status: "PENDING",
-      },
-    });
-  }
+  // Bulk create in database using createMany for instant insertion
+  await prisma.match.createMany({
+    data: allFixtures.map((f) => ({
+      leagueId,
+      matchday: f.matchday,
+      homeTeamId: f.homeTeamId,
+      awayTeamId: f.awayTeamId,
+      status: "PENDING",
+    })),
+  });
 
   return { success: true, count: allFixtures.length };
 }

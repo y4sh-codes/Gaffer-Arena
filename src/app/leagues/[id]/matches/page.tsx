@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { generateDoubleRoundRobinSchedule } from "@/lib/simulator/fixture-generator";
 import FixturesListClient from "./FixturesListClient";
 
+export const dynamic = "force-dynamic";
+
 interface MatchesPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ matchday?: string }>;

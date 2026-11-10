@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { getCurrentUserOrGuest } from "@/lib/actions/league-actions";
 import { Trophy, PlusCircle, Users, ArrowRight, ShieldCheck, Flame, Play, LayoutGrid } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const user = await getCurrentUserOrGuest();
 

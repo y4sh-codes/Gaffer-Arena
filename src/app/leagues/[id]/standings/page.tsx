@@ -8,6 +8,8 @@ import SeasonTransitionModal from "@/components/season/SeasonTransitionModal";
 import { computeLeagueStats } from "@/lib/simulator/stats-calculator";
 import { ArrowLeft, Play, LayoutGrid, Flame } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 interface StandingsPageProps {
   params: Promise<{ id: string }>;
 }

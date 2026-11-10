@@ -4,6 +4,8 @@ import { simulateMatch } from "@/lib/simulator/match-engine";
 import LiveMatchView from "@/components/simulator/LiveMatchView";
 import { MatchLogPayload } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 interface MatchDetailPageProps {
   params: Promise<{ id: string; matchId: string }>;
 }

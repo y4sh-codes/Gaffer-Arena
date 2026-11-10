@@ -31,38 +31,42 @@ async function runEndToEndVerification() {
     teamName: "Apex Galacticos",
     managerName: "Pep Gaffer",
   });
-  console.log(`✅ League created: ID ${createRes.leagueId}, Entry Code: ${createRes.code}`);
+  if (!createRes.success || !createRes.leagueId) {
+    throw new Error(`Phase 2 verification failed: could not create league: ${createRes.error}`);
+  }
+  const leagueId = createRes.leagueId;
+  console.log(`✅ League created: ID ${leagueId}, Entry Code: ${createRes.code}`);
 
   // Fill lobby with AI teams to reach 16 teams
-  const fillRes = await fillLobbyWithAITeamsAction(createRes.leagueId, 15);
+  const fillRes = await fillLobbyWithAITeamsAction(leagueId, 15);
   console.log(`✅ Filled lobby with AI teams (added ${fillRes.added}). Total 16 teams registered.`);
 
   const leagueWithTeams = await prisma.league.findUnique({
-    where: { id: createRes.leagueId },
+    where: { id: leagueId },
     include: { teams: true },
   });
   console.log(`✅ Verified League registered teams count: ${leagueWithTeams?.teams.length}/16`);
   if (leagueWithTeams?.teams.length !== 16) throw new Error("Phase 2 verification failed: Teams count != 16");
 
   // Start Auction
-  await startAuctionAction(createRes.leagueId);
+  await startAuctionAction(leagueId);
   console.log("✅ Auction triggered by commissioner. Status transitioned to AUCTION.");
 
   // PHASE 3: Real-Time Live Player Auction Draft Engine
   console.log("\n--- PHASE 3: Live Player Auction Draft Engine ---");
-  const auction = await getOrInitializeAuction(createRes.leagueId);
+  const auction = await getOrInitializeAuction(leagueId);
   console.log(`✅ Balanced player bag generated: ${auction.playerBag.length} cards`);
   console.log(`✅ Active Player: ${auction.playerBag[0]?.name} (${auction.playerBag[0]?.ovr} OVR)`);
   console.log(`✅ Starting Bid: $${(auction.currentBid / 1000000).toFixed(1)}M | Timer: ${auction.timeLeftSeconds}s`);
 
   // Place Bid for user's team
   const myTeam = leagueWithTeams.teams[0];
-  const bidRes = await placeBid(createRes.leagueId, myTeam.id, 5000000);
+  const bidRes = await placeBid(leagueId, myTeam.id, 5000000);
   console.log(`✅ Placed bid +$5M for team "${myTeam.teamName}". Result: ${bidRes.success}`);
   console.log(`✅ Dynamic clock reset verified: Timer reset to ${auction.timeLeftSeconds}s`);
 
   // Resolve Auction (assign player)
-  await resolveAuctionTimerExpiry(createRes.leagueId);
+  await resolveAuctionTimerExpiry(leagueId);
   const myTeamAfterDraft = await prisma.team.findUnique({
     where: { id: myTeam.id },
     include: { players: { include: { player: true } } },
@@ -120,11 +124,11 @@ async function runEndToEndVerification() {
 
   // PHASE 5: Double Round-Robin Fixtures & Live Match Simulator
   console.log("\n--- PHASE 5: Double Round-Robin Fixture Engine & Match Simulator ---");
-  const fixtureRes = await generateDoubleRoundRobinSchedule(createRes.leagueId);
+  const fixtureRes = await generateDoubleRoundRobinSchedule(leagueId);
   console.log(`✅ Generated complete schedule: ${fixtureRes.count} double round-robin matches`);
 
   const firstMatch = await prisma.match.findFirst({
-    where: { leagueId: createRes.leagueId, matchday: 1 },
+    where: { leagueId, matchday: 1 },
     include: { homeTeam: true, awayTeam: true },
   });
 
@@ -137,13 +141,13 @@ async function runEndToEndVerification() {
   // PHASE 6: Standings Table & Off-Season Progression Engine
   console.log("\n--- PHASE 6: Standings Dashboard & Off-Season Progression ---");
   const allLeagueMatches = await prisma.match.findMany({
-    where: { leagueId: createRes.leagueId },
+    where: { leagueId },
     include: { homeTeam: true, awayTeam: true },
   });
   const stats = computeLeagueStats(allLeagueMatches);
   console.log(`✅ Golden Boot leader: ${stats.goldenBoot[0]?.playerName || "None yet"} (${stats.goldenBoot[0]?.goals || 0} goals)`);
 
-  const advanceRes = await advanceSeasonAction(createRes.leagueId);
+  const advanceRes = await advanceSeasonAction(leagueId);
   console.log(`✅ Advanced to Season ${advanceRes.newSeason}!`);
   console.log(`✅ Budget Multiplier applied: Champion received ${advanceRes.summary[0]?.multiplierBonus} budget boost`);
   console.log(`   New Champion Budget: $${(advanceRes.summary[0]?.newBudget / 1000000).toFixed(1)}M (up from $${(advanceRes.summary[0]?.oldBudget / 1000000).toFixed(1)}M)`);

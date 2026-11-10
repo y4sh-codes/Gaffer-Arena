@@ -49,17 +49,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (user?.email) {
+        try {
+          const email = user.email.toLowerCase().trim();
+          const existing = await prisma.user.findUnique({ where: { email } });
+          if (!existing) {
+            await prisma.user.create({
+              data: {
+                id: user.id || undefined,
+                email,
+                name: user.name || "Gaffer",
+                image: user.image || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
+              },
+            });
+          } else {
+            await prisma.user.update({
+              where: { id: existing.id },
+              data: {
+                name: user.name || existing.name,
+                image: user.image || existing.image,
+              },
+            });
+          }
+        } catch (e) {
+          console.error("Error upserting user on signIn:", e);
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user }) {
+      if (user?.email) {
+        try {
+          const email = user.email.toLowerCase().trim();
+          const dbUser = await prisma.user.findUnique({ where: { email } });
+          if (dbUser) {
+            token.sub = dbUser.id;
+          } else if (user.id) {
+            token.sub = user.id;
+          }
+        } catch (e) {
+          console.error("Error finding user in jwt callback:", e);
+        }
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (token?.sub && session.user) {
         session.user.id = token.sub;
       }
       return session;
-    },
-    async jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
-      }
-      return token;
     },
   },
   pages: {
