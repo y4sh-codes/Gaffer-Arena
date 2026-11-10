@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  leaguesCreated League[] @relation("LeagueCreator")
+  teams          Team[]
+  accounts       Account[]
+  sessions       Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model League {
+  id             String   @id @default(cuid())
+  name           String
+  code           String   @unique
+  maxTeams       Int      @default(16)
+  startingBudget Float    @default(250000000)
+  currentSeason  Int      @default(1)
+  status         String   @default("DRAFT") // DRAFT, AUCTION, IN_SEASON, COMPLETED
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  creator User    @relation("LeagueCreator", fields: [createdById], references: [id])
+  teams   Team[]
+  matches Match[]
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  leagueId       String
+  userId         String
+  teamName       String
+  managerName    String
+  budget         Float
+  points         Int      @default(0)
+  matchesPlayed  Int      @default(0)
+  won            Int      @default(0)
+  drawn          Int      @default(0)
+  lost           Int      @default(0)
+  goalsFor       Int      @default(0)
+  goalsAgainst   Int      @default(0)
+  goalDifference Int      @default(0)
+  formation      String   @default("4-3-3")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  league      League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  players     TeamPlayer[]
+  homeMatches Match[]      @relation("HomeMatches")
+  awayMatches Match[]      @relation("AwayMatches")
+}
+
+model Player {
+  id             String   @id @default(cuid())
+  externalFifaId Int      @unique
+  name           String
+  cardYear       Int      @default(2024)
+  nationality    String
+  league         String
+  team           String
+  ovr            Int
+  pos            String
+  att            Int      @default(70) // SHO / ATT
+  def            Int      @default(70) // DEF
+  pas            Int      @default(70) // PAS
+  phy            Int      @default(70) // PHY
+  dri            Int      @default(70) // DRI
+  spe            Int      @default(70) // PAC / SPE
+  traits         String   @default("[]") // JSON string of traits
+  playstyle      String   @default("Balanced")
+  rating         Float    @default(85.0)
+  bio20Words     String   @default("")
+  image          String   @default("/placeholder-player.png")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  teamPlayers TeamPlayer[]
+}
+
+model TeamPlayer {
+  id              String   @id @default(cuid())
+  teamId          String
+  playerId        String
+  purchasePrice   Float    @default(0)
+  isStarter       Boolean  @default(false)
+  positionOnField String?
+  playerRole      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, playerId])
+}
+
+model Match {
+  id         String   @id @default(cuid())
+  leagueId   String
+  homeTeamId String
+  awayTeamId String
+  homeGoals  Int      @default(0)
+  awayGoals  Int      @default(0)
+  matchday   Int      @default(1)
+  status     String   @default("PENDING") // PENDING, SIMULATING, FINISHED
+  logData    String   @default("[]") // JSON string containing minute-by-minute timeline, scorers, cards, match stats
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam Team   @relation("HomeMatches", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  awayTeam Team   @relation("AwayMatches", fields: [awayTeamId], references: [id], onDelete: Cascade)
+}
