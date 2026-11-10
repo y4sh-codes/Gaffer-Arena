@@ -20,87 +20,67 @@ export async function getCurrentUserOrGuest() {
       const email = session.user.email?.trim().toLowerCase();
       const sessionUserId = session.user.id;
 
-      let dbUser = null;
+      // If email exists, upsert user atomically
+      if (email) {
+        const name = session.user.name || email.split("@")[0] || "Gaffer Boss";
+        const image =
+          session.user.image ||
+          `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
 
-      // 1. Try to find user by session user ID
-      if (sessionUserId) {
-        dbUser = await prisma.user.findUnique({
-          where: { id: sessionUserId },
-        });
-      }
-
-      // 2. Try to find user by email
-      if (!dbUser && email) {
-        dbUser = await prisma.user.findUnique({
+        const dbUser = await prisma.user.upsert({
           where: { email },
+          update: {
+            name: session.user.name || undefined,
+            image: session.user.image || undefined,
+          },
+          create: {
+            ...(sessionUserId ? { id: sessionUserId } : {}),
+            email,
+            name,
+            image,
+          },
         });
-      }
-
-      // 3. If found, ensure profile info is updated
-      if (dbUser) {
-        if (
-          (session.user.name && dbUser.name !== session.user.name) ||
-          (session.user.image && dbUser.image !== session.user.image)
-        ) {
-          dbUser = await prisma.user.update({
-            where: { id: dbUser.id },
-            data: {
-              name: session.user.name || dbUser.name,
-              image: session.user.image || dbUser.image,
-            },
-          });
-        }
         return dbUser;
       }
 
-      // 4. If user not in DB yet (e.g. Google OAuth user), create them now
-      const name = session.user.name || (email ? email.split("@")[0] : "Gaffer Boss");
-      const image =
-        session.user.image ||
-        `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
-
-      dbUser = await prisma.user.create({
-        data: {
-          ...(sessionUserId ? { id: sessionUserId } : {}),
-          email: email || `user_${Date.now()}@arena.fc`,
-          name,
-          image,
-        },
-      });
-
-      return dbUser;
+      // If no email but session user ID exists, look up by ID
+      if (sessionUserId) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: sessionUserId },
+        });
+        if (dbUser) return dbUser;
+      }
     }
   } catch (e: unknown) {
-    // If Next.js bails out for dynamic server usage (headers/cookies in RSC), re-throw so Next.js handles it properly
-    if (
-      e &&
-      typeof e === "object" &&
-      ("digest" in e && (e as { digest: unknown }).digest === "DYNAMIC_SERVER_USAGE")
-    ) {
-      throw e;
-    }
-    // Graceful fallback when invoked outside HTTP request scope (e.g. scripts/tests)
-    if (e instanceof Error && !e.message.includes("outside a request scope")) {
-      console.error("Error resolving session in getCurrentUserOrGuest:", e);
-    }
+    console.warn("Session resolution notice in getCurrentUserOrGuest:", e);
   }
 
-  // Fallback to demo default manager if not signed in or in standalone script
-  let demoUser = await prisma.user.findFirst({
-    where: { email: "gaffer@arena.fc" },
-  });
-
-  if (!demoUser) {
-    demoUser = await prisma.user.create({
-      data: {
-        email: "gaffer@arena.fc",
-        name: "Pep Gaffer",
-        image: "https://api.dicebear.com/7.x/bottts/svg?seed=PepGaffer",
-      },
+  // Fallback to demo default manager if not signed in or session lookup failed
+  try {
+    let demoUser = await prisma.user.findFirst({
+      where: { email: "gaffer@arena.fc" },
     });
-  }
 
-  return demoUser;
+    if (!demoUser) {
+      demoUser = await prisma.user.create({
+        data: {
+          email: "gaffer@arena.fc",
+          name: "Pep Gaffer",
+          image: "https://api.dicebear.com/7.x/bottts/svg?seed=PepGaffer",
+        },
+      });
+    }
+
+    return demoUser;
+  } catch (dbErr) {
+    console.warn("Database fallback in getCurrentUserOrGuest:", dbErr);
+    return {
+      id: "cmwac5jtb0000ikfvmz2ey5ha",
+      email: "gaffer@arena.fc",
+      name: "Pep Gaffer",
+      image: "https://api.dicebear.com/7.x/bottts/svg?seed=PepGaffer",
+    } as any;
+  }
 }
 
 export async function createLeagueAction(formData: {

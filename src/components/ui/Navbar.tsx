@@ -66,11 +66,11 @@ export default function Navbar() {
   const user = session?.user;
   const initials = user?.name
     ? user.name
-        .split(" ")
-        .map((n) => n[0])
+        .trim()
+        .split(/\s+/)
+        .map((n) => n[0]?.toUpperCase() || "")
         .slice(0, 2)
-        .join("")
-        .toUpperCase()
+        .join("") || "GA"
     : "GA";
 
   return (

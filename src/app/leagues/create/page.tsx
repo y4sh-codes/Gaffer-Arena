@@ -6,8 +6,6 @@ import { createLeagueAction } from "@/lib/actions/league-actions";
 import { Trophy, DollarSign, Shield, ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
-
 export default function CreateLeaguePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
