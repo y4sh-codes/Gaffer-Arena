@@ -25,7 +25,7 @@ export async function advanceSeasonAction(leagueId: string) {
     2: 1.20, // 3rd Place: +20% budget
   };
 
-  const updatedTeams = [];
+  const updatedTeams: any[] = [];
 
   await prisma.$transaction(async (tx) => {
     // 1. Apply prize multipliers and reset match records
@@ -73,9 +73,11 @@ export async function advanceSeasonAction(leagueId: string) {
     });
   });
 
-  revalidatePath(`/leagues/${leagueId}/standings`);
-  revalidatePath(`/leagues/${leagueId}/auction`);
-  revalidatePath("/dashboard");
+  try {
+    revalidatePath(`/leagues/${leagueId}/standings`);
+    revalidatePath(`/leagues/${leagueId}/auction`);
+    revalidatePath("/dashboard");
+  } catch {}
 
   return {
     success: true,

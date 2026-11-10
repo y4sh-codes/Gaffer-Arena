@@ -51,6 +51,8 @@ export async function saveTeamTacticsAction(payload: {
     }
   });
 
-  revalidatePath(`/leagues/[id]/team`);
+  try {
+    revalidatePath(`/leagues/[id]/team`);
+  } catch {}
   return { success: true };
 }

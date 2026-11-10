@@ -31,5 +31,5 @@ export default async function LobbyPage({ params }: LobbyPageProps) {
     redirect(`/leagues/${league.id}/team`);
   }
 
-  return <LeagueLobby league={league} currentUserId={user.id} />;
+  return <LeagueLobby league={league} currentUserId={user.id || ""} />;
 }

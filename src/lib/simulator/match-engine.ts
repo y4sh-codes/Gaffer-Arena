@@ -36,12 +36,24 @@ export async function simulateMatch(matchId: string): Promise<MatchLogPayload> {
 
   const rand = seededRandom(`${match.id}-${match.leagueId}-${match.matchday}`);
 
-  const homeStarters = match.homeTeam.players.filter((p) => p.isStarter);
-  const awayStarters = match.awayTeam.players.filter((p) => p.isStarter);
+  // Fetch fallback squad if any team has incomplete squad
+  const defaultSquad = await prisma.player.findMany({ take: 11, orderBy: { ovr: "desc" } });
 
-  // Fallback to all squad players if starters aren't marked
-  const homeXI = homeStarters.length >= 7 ? homeStarters : match.homeTeam.players.slice(0, 11);
-  const awayXI = awayStarters.length >= 7 ? awayStarters : match.awayTeam.players.slice(0, 11);
+  const formatSquad = (team: typeof match.homeTeam) => {
+    const starters = team.players.filter((p) => p.isStarter);
+    if (starters.length >= 7) return starters;
+    if (team.players.length >= 7) return team.players.slice(0, 11);
+    return defaultSquad.map((p) => ({
+      id: `fallback-${p.id}`,
+      isStarter: true,
+      positionOnField: p.pos,
+      playerRole: "Standard",
+      player: p,
+    }));
+  };
+
+  const homeXI = formatSquad(match.homeTeam);
+  const awayXI = formatSquad(match.awayTeam);
 
   // 1. Home Ground Advantage: +7% base rating boost
   const HGA_MULTIPLIER = 1.07;

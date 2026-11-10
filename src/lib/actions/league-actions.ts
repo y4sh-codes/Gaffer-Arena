@@ -14,12 +14,16 @@ function generateUniqueCode(): string {
 }
 
 export async function getCurrentUserOrGuest() {
-  const session = await auth();
-  if (session?.user?.id) {
-    return session.user;
+  try {
+    const session = await auth();
+    if (session?.user?.id) {
+      return session.user;
+    }
+  } catch (e) {
+    // Graceful fallback when invoked outside HTTP request scope (e.g. scripts/tests)
   }
 
-  // Fallback to demo default manager if not signed in
+  // Fallback to demo default manager if not signed in or in standalone script
   let demoUser = await prisma.user.findFirst({
     where: { email: "gaffer@arena.fc" },
   });
@@ -84,7 +88,9 @@ export async function createLeagueAction(formData: {
     },
   });
 
-  revalidatePath("/dashboard");
+  try {
+    revalidatePath("/dashboard");
+  } catch {}
   return { success: true, leagueId: league.id, code: league.code };
 }
 
@@ -136,8 +142,10 @@ export async function joinLeagueAction(formData: {
     },
   });
 
-  revalidatePath(`/leagues/${league.id}/lobby`);
-  revalidatePath("/dashboard");
+  try {
+    revalidatePath(`/leagues/${league.id}/lobby`);
+    revalidatePath("/dashboard");
+  } catch {}
   return { success: true, leagueId: league.id };
 }
 
@@ -162,7 +170,9 @@ export async function startAuctionAction(leagueId: string) {
     data: { status: "AUCTION" },
   });
 
-  revalidatePath(`/leagues/${leagueId}/lobby`);
+  try {
+    revalidatePath(`/leagues/${leagueId}/lobby`);
+  } catch {}
   return { success: true };
 }
 
@@ -224,6 +234,8 @@ export async function fillLobbyWithAITeamsAction(leagueId: string, count = 15) {
     });
   }
 
-  revalidatePath(`/leagues/${leagueId}/lobby`);
+  try {
+    revalidatePath(`/leagues/${leagueId}/lobby`);
+  } catch {}
   return { success: true, added: toAdd };
 }
