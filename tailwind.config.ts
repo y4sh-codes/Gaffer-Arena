@@ -12,6 +12,9 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        surface: "var(--surface)",
+        muted: "var(--muted)",
+        subtle: "var(--subtle)",
         arena: {
           dark: "#080c14",
           card: "rgba(16, 24, 39, 0.75)",
