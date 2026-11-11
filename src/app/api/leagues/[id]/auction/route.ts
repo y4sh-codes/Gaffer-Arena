@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getCurrentUserOrGuest } from "@/lib/actions/league-actions";
 import {
   getOrInitializeAuction,
   formatAuctionState,
   placeBid,
   skipPlayer,
   resolveAuctionTimerExpiry,
-  triggerAIBidCheck,
+  endAuctionByCreator,
+  markAuctionCompletedIfActive,
 } from "@/lib/auction/auction-manager";
 
 export async function GET(
@@ -29,12 +31,22 @@ export async function GET(
       orderBy: { points: "desc" },
     });
 
+    const [league, currentUser] = await Promise.all([
+      prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { createdById: true, status: true },
+      }),
+      getCurrentUserOrGuest(),
+    ]);
+
     const formatted = formatAuctionState(state);
 
     return NextResponse.json({
       success: true,
       auction: formatted,
       teams,
+      leagueStatus: league?.status ?? null,
+      isCreator: Boolean(league && currentUser?.id && league.createdById === currentUser.id),
     });
   } catch (error: unknown) {
     return NextResponse.json(
@@ -68,12 +80,8 @@ export async function POST(
       if (state.status === "ACTIVE") {
         state.timeLeftSeconds = Math.max(0, state.timeLeftSeconds - 1);
 
-        // Periodically allow AI managers to bid
-        if (state.timeLeftSeconds > 2 && state.timeLeftSeconds < 18) {
-          await triggerAIBidCheck(leagueId);
-        }
-
-        // If clock hit 0, resolve auction
+        // If clock hit 0, resolve auction.
+        // Only real managers place bids; there is no AI bidding.
         if (state.timeLeftSeconds <= 0) {
           await resolveAuctionTimerExpiry(leagueId);
         }
@@ -84,6 +92,53 @@ export async function POST(
     if (action === "resolve") {
       const state = await resolveAuctionTimerExpiry(leagueId);
       return NextResponse.json({ success: true, auction: formatAuctionState(state) });
+    }
+
+    if (action === "endAuction") {
+      const user = await getCurrentUserOrGuest();
+      if (!user?.id) {
+        return NextResponse.json(
+          { success: false, error: "You must be logged in to end the auction" },
+          { status: 401 }
+        );
+      }
+
+      const res = await endAuctionByCreator(leagueId, user.id);
+      return NextResponse.json(res);
+    }
+
+    if (action === "endLeague") {
+      const user = await getCurrentUserOrGuest();
+      if (!user?.id) {
+        return NextResponse.json(
+          { success: false, error: "You must be logged in to end the league" },
+          { status: 401 }
+        );
+      }
+
+      const league = await prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { createdById: true },
+      });
+
+      if (!league) {
+        return NextResponse.json({ success: false, error: "League not found" }, { status: 404 });
+      }
+
+      if (league.createdById !== user.id) {
+        return NextResponse.json(
+          { success: false, error: "Only the league creator can end this league" },
+          { status: 403 }
+        );
+      }
+
+      await prisma.league.update({
+        where: { id: leagueId },
+        data: { status: "COMPLETED" },
+      });
+      markAuctionCompletedIfActive(leagueId);
+
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });

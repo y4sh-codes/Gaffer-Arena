@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
+import { getCurrentUserOrGuest } from "@/lib/actions/league-actions";
+import EndLeagueButton from "@/components/league/EndLeagueButton";
 import StandingsTable from "@/components/stats/StandingsTable";
 import AwardsLeaderboard from "@/components/stats/AwardsLeaderboard";
 import TeamOfTheWeek from "@/components/stats/TeamOfTheWeek";
@@ -37,6 +39,9 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
   });
 
   if (!league) notFound();
+
+  const currentUser = await getCurrentUserOrGuest();
+  const isCreator = league.createdById === currentUser.id;
 
   // Compute individual awards and stats from matchday logs
   const stats = computeLeagueStats(league.matches);
@@ -95,11 +100,16 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
             <Play className="w-3.5 h-3.5" />
             Fixtures
           </Link>
-          <SeasonTransitionModal
-            leagueId={league.id}
-            currentSeason={league.currentSeason}
-            teams={league.teams}
-          />
+          {league.status !== "COMPLETED" && (
+            <SeasonTransitionModal
+              leagueId={league.id}
+              currentSeason={league.currentSeason}
+              teams={league.teams}
+            />
+          )}
+          {isCreator && league.status !== "COMPLETED" && (
+            <EndLeagueButton leagueId={league.id} />
+          )}
         </div>
       </div>
 

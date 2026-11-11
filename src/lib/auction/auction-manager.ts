@@ -84,6 +84,11 @@ export async function getOrInitializeAuction(leagueId: string): Promise<AuctionM
     const firstPlayer = balancedBag[0];
     const initialBid = firstPlayer ? calculateStartingBid(firstPlayer.ovr) : 10000000;
 
+    // A league that already left the auction phase should never re-open bidding
+    // just because the in-memory registry was cleared (e.g. server restart).
+    const initialStatus =
+      league.status === "IN_SEASON" || league.status === "COMPLETED" ? "COMPLETED" : "ACTIVE";
+
     state = {
       leagueId,
       playerBag: balancedBag,
@@ -92,8 +97,8 @@ export async function getOrInitializeAuction(leagueId: string): Promise<AuctionM
       highestBidderTeamId: null,
       highestBidderTeamName: null,
       highestBidderUserId: null,
-      timeLeftSeconds: 20,
-      status: "ACTIVE",
+      timeLeftSeconds: initialStatus === "COMPLETED" ? 0 : 20,
+      status: initialStatus,
       skippedTeamIds: [],
       lastBidTimestamp: Date.now(),
       bidHistory: [],
@@ -202,8 +207,22 @@ export async function skipPlayer(
   return { success: true, state: formatAuctionState(state), resolved: false };
 }
 
+async function allTeamsReachedMaxSquad(leagueId: string): Promise<boolean> {
+  const teams = await prisma.team.findMany({
+    where: { leagueId },
+    select: { _count: { select: { players: true } } },
+  });
+
+  return (
+    teams.length > 0 &&
+    teams.every((team) => team._count.players >= SQUAD_MAX_PLAYERS)
+  );
+}
+
 export async function resolveAuctionTimerExpiry(leagueId: string): Promise<AuctionMemoryState> {
   const state = await getOrInitializeAuction(leagueId);
+  if (state.status === "COMPLETED") return state;
+
   const currentPlayer = state.playerBag[state.currentIndex];
 
   if (state.highestBidderTeamId && currentPlayer) {
@@ -241,8 +260,13 @@ export async function resolveAuctionTimerExpiry(leagueId: string): Promise<Aucti
 
   // Advance to next player
   state.currentIndex++;
-  if (state.currentIndex >= state.playerBag.length) {
+
+  // The auction also ends as soon as every franchise has filled its 21-player squad
+  const squadsFull = await allTeamsReachedMaxSquad(leagueId);
+
+  if (squadsFull || state.currentIndex >= state.playerBag.length) {
     state.status = "COMPLETED";
+    state.timeLeftSeconds = 0;
     await prisma.league.update({
       where: { id: leagueId },
       data: { status: "IN_SEASON" },
@@ -262,6 +286,40 @@ export async function resolveAuctionTimerExpiry(leagueId: string): Promise<Aucti
   state.lastBidTimestamp = Date.now();
 
   return state;
+}
+
+export async function endAuctionByCreator(
+  leagueId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string; state?: any }> {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { createdById: true },
+  });
+
+  if (!league) return { success: false, error: "League not found" };
+  if (league.createdById !== userId) {
+    return { success: false, error: "Only the league creator can end the auction" };
+  }
+
+  const state = await getOrInitializeAuction(leagueId);
+  state.status = "COMPLETED";
+  state.timeLeftSeconds = 0;
+
+  await prisma.league.update({
+    where: { id: leagueId },
+    data: { status: "IN_SEASON" },
+  });
+
+  return { success: true, state: formatAuctionState(state) };
+}
+
+export function markAuctionCompletedIfActive(leagueId: string) {
+  const state = auctionRegistry.get(leagueId);
+  if (state) {
+    state.status = "COMPLETED";
+    state.timeLeftSeconds = 0;
+  }
 }
 
 export function formatAuctionState(state: AuctionMemoryState) {
@@ -306,46 +364,3 @@ export function formatAuctionState(state: AuctionMemoryState) {
   };
 }
 
-// Bot/AI Bidding Simulation Helper
-export async function triggerAIBidCheck(leagueId: string): Promise<boolean> {
-  const state = await getOrInitializeAuction(leagueId);
-  if (state.status !== "ACTIVE" || !state.playerBag[state.currentIndex]) return false;
-
-  const currentPlayer = state.playerBag[state.currentIndex];
-
-  // Find AI teams in this league that can afford the player
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    include: {
-      teams: {
-        where: {
-          managerName: { not: "Pep Gaffer" }, // AI managers
-        },
-        include: { players: true },
-      },
-    },
-  });
-
-  if (!league || league.teams.length === 0) return false;
-
-  // Filter eligible AI teams
-  const eligible = league.teams.filter((t) => {
-    if (t.id === state.highestBidderTeamId) return false;
-    if (t.players.length >= SQUAD_MAX_PLAYERS) return false;
-    const remainingSlots = Math.max(0, SQUAD_MIN_PLAYERS - (t.players.length + 1));
-    const nextBid = state.currentBid + 1000000;
-    return t.budget - nextBid >= remainingSlots * MIN_PLAYER_SLOT_RESERVE;
-  });
-
-  if (eligible.length === 0) return false;
-
-  // 40% chance an eligible AI team bids on this tick if price is reasonable
-  const shouldBid = Math.random() < 0.45;
-  if (!shouldBid) return false;
-
-  const chosenTeam = eligible[Math.floor(Math.random() * eligible.length)];
-  const increment = Math.random() > 0.7 ? 2000000 : 1000000;
-
-  await placeBid(leagueId, chosenTeam.id, increment);
-  return true;
-}

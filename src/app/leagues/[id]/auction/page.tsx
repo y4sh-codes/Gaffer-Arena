@@ -7,7 +7,7 @@ import PlayerAuctionCard from "@/components/auction/PlayerAuctionCard";
 import AuctionClock from "@/components/auction/AuctionClock";
 import BiddingConsole from "@/components/auction/BiddingConsole";
 import AuctionSquadOverview from "@/components/auction/AuctionSquadOverview";
-import { ArrowLeft, Loader2, Sparkles, CheckCircle2, Trophy, Play } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, CheckCircle2, Trophy, Play, Flag, Power, ShieldAlert } from "lucide-react";
 
 interface AuctionPageProps {
   params: Promise<{ id: string }>;
@@ -21,6 +21,10 @@ export default function AuctionPage({ params }: AuctionPageProps) {
   const [biddingInProgress, setBiddingInProgress] = useState(false);
   const [auctionData, setAuctionData] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
+  const [isCreator, setIsCreator] = useState(false);
+  const [leagueStatus, setLeagueStatus] = useState<string>("");
+  const [endingAuction, setEndingAuction] = useState(false);
+  const [endingLeague, setEndingLeague] = useState(false);
 
   // Find user's active team in this league (default to Pep Gaffer / first team if guest)
   const myTeam = teams.find((t) => t.managerName === "Pep Gaffer") || teams[0] || null;
@@ -32,6 +36,8 @@ export default function AuctionPage({ params }: AuctionPageProps) {
       if (data.success) {
         setAuctionData(data.auction);
         setTeams(data.teams);
+        setIsCreator(Boolean(data.isCreator));
+        setLeagueStatus(data.leagueStatus || "");
       }
     } catch (e) {
       console.error("Auction fetch error:", e);
@@ -114,6 +120,62 @@ export default function AuctionPage({ params }: AuctionPageProps) {
     }
   };
 
+  const handleEndAuction = async () => {
+    const confirmed = window.confirm(
+      "End the auction now? The league will move to the season phase and remaining players will not be auctioned."
+    );
+    if (!confirmed) return;
+
+    setEndingAuction(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "endAuction" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.state) setAuctionData(data.state);
+        await fetchAuction();
+      } else {
+        alert(data.error || "Failed to end auction");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to end auction");
+    } finally {
+      setEndingAuction(false);
+    }
+  };
+
+  const handleEndLeague = async () => {
+    const confirmed = window.confirm(
+      "End this league? It will be marked as completed and no further fixtures should be played."
+    );
+    if (!confirmed) return;
+
+    setEndingLeague(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "endLeague" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        router.push("/dashboard");
+        router.refresh();
+      } else {
+        alert(data.error || "Failed to end league");
+        setEndingLeague(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to end league");
+      setEndingLeague(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -125,6 +187,7 @@ export default function AuctionPage({ params }: AuctionPageProps) {
 
   const currentPlayer = auctionData?.currentPlayer;
   const isDraftCompleted = auctionData?.status === "COMPLETED" || !currentPlayer;
+  const auctionActive = auctionData?.status === "ACTIVE";
   const hasSkipped = myTeam && auctionData?.skippedTeamIds?.includes(myTeam.id);
 
   return (
@@ -168,6 +231,52 @@ export default function AuctionPage({ params }: AuctionPageProps) {
         </div>
       </div>
 
+      {isCreator && (
+        <div className="glass-panel rounded-2xl p-4 border border-amber-500/30 bg-amber-950/10 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-amber-300 font-bold uppercase text-xs tracking-wider">
+              <ShieldAlert className="w-4 h-4" />
+              Commissioner Controls
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Only the league creator can end the auction or the league.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {auctionActive && (
+              <button
+                onClick={handleEndAuction}
+                disabled={endingAuction || endingLeague}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold uppercase tracking-wider border border-amber-500/40 transition disabled:opacity-50"
+              >
+                {endingAuction ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Flag className="w-3.5 h-3.5" />
+                )}
+                {endingAuction ? "Ending Auction..." : "End Auction"}
+              </button>
+            )}
+
+            {leagueStatus !== "COMPLETED" && (
+              <button
+                onClick={handleEndLeague}
+                disabled={endingAuction || endingLeague}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold uppercase tracking-wider border border-red-500/30 transition disabled:opacity-50"
+              >
+                {endingLeague ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Power className="w-3.5 h-3.5" />
+                )}
+                {endingLeague ? "Ending League..." : "End League"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isDraftCompleted ? (
         <div className="glass-panel rounded-3xl p-12 text-center border border-white/10 max-w-2xl mx-auto my-12">
           <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-arena-neonGreen flex items-center justify-center mx-auto mb-6 shadow-neon">
@@ -177,7 +286,7 @@ export default function AuctionPage({ params }: AuctionPageProps) {
             Auction Draft Complete!
           </h2>
           <p className="text-slate-400 text-sm max-w-md mx-auto mb-8">
-            All 16 franchises have assembled their squads. Proceed to the Tactics Hub to set your starting XI, player roles, and mentality before fixture kickoff.
+            The auction draft has concluded. Proceed to the Tactics Hub to set your starting XI, player roles, and mentality before fixture kickoff.
           </p>
           <Link
             href={`/leagues/${leagueId}/team`}
