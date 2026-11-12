@@ -20,7 +20,7 @@ export default function CreateLeaguePage() {
     { label: "$150M (Challenger)", value: 150000000 },
     { label: "$250M (Standard FC)", value: 250000000 },
     { label: "$350M (Galactico)", value: 350000000 },
-    { label: "$500M (Super Club)", value: 500000000 },
+    { label: "$1000M (Super Club)", value: 1000000000 },
   ];
 
   async function handleSubmit(e: React.FormEvent) {
@@ -122,7 +122,7 @@ export default function CreateLeaguePage() {
             <input
               type="range"
               min={100000000}
-              max={500000000}
+              max={1000000000}
               step={10000000}
               value={startingBudget}
               onChange={(e) => setStartingBudget(Number(e.target.value))}

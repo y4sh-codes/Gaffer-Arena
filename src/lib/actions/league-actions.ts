@@ -96,7 +96,8 @@ export async function createLeagueAction(formData: {
     }
 
     const leagueName = formData.name?.trim() || "Champions Super League";
-    const budget = Number(formData.startingBudget) || 250000000;
+    const requestedBudget = Number(formData.startingBudget) || 250000000;
+    const budget = Math.min(Math.max(requestedBudget, 100000000), 1000000000);
     const teamName = formData.teamName?.trim() || "Apex Galacticos";
     const managerName = formData.managerName?.trim() || user.name || "Gaffer Boss";
 

@@ -13,7 +13,7 @@ Gaffer Arena is a multiplayer tactical football management platform built with N
 - **Attributes & Traits**: Mapped pillar stats (`PAC/SPE`, `SHO/ATT`, `PAS`, `DRI`, `DEF`, `PHY`), playstyles (`Finesse Shot+`, `Quick Step+`, `Tiki Taka+`), and traits.
 
 ### Phase 2: League Creation, 6-Char Entry Codes & 16-Team Lobby
-- **Commissioners**: Create custom leagues with configurable starting budgets ($100M–$500M) and unique 6-character secret invite codes.
+- **Commissioners**: Create custom leagues with configurable starting budgets ($100M–$1000M) and unique 6-character secret invite codes.
 - **Managers**: Join existing draft lobbies via entry code with custom Team Name & Manager Name.
 - **Lobby Controls**: Enforces strict 16-team maximum caps and allows one-click AI manager backfill for rapid solo/multiplayer testing.
 
